@@ -50,8 +50,8 @@ The router watches `.swarm/messages.jsonl` and pushes each message into the corr
 After this repo is on your machine:
 
 ```bash
-git clone https://github.com/<your-user>/ai-swarm-cockpit ~/tools/ai-swarm-cockpit
-cd /path/to/your/project
+git clone https://github.com/Mazukiri/ai-swarm-cockpit ~/tools/ai-swarm-cockpit
+cd /path_to_your_project
 ~/tools/ai-swarm-cockpit/install-to-project.sh .
 ```
 
