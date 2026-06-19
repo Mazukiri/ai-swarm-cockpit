@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ ! -f .swarm/runtime/panes.json ]]; then
+  echo "No .swarm/runtime/panes.json found. Start the swarm first." >&2
+  exit 1
+fi
+
+python3 - <<'PY'
+import json
+import subprocess
+from pathlib import Path
+
+panes = json.loads(Path('.swarm/runtime/panes.json').read_text())
+
+agents = ['agy', 'claude', 'codex', 'deepseek']
+for agent in agents:
+    pane = panes.get(agent)
+    prompt_path = Path(f'.swarm/prompts/{agent}.md')
+    if not pane or not prompt_path.exists():
+        continue
+    prompt = prompt_path.read_text(encoding='utf-8')
+    text = f"""Read AI_COLLAB.md and .swarm/prompts/{agent}.md. You are running inside AI Swarm Cockpit.
+
+Important communication commands available in this project:
+- say agy "message"
+- say claude "message"
+- say codex "message"
+- say deepseek "message"
+- broadcast "message"
+
+Your specific role prompt:
+
+{prompt}
+
+Acknowledge your role by sending a short message to AGY using the say command. Do not start editing files until AGY assigns or confirms a task.
+"""
+    buf = f'swarm_boot_{agent}'
+    subprocess.run(['tmux', 'set-buffer', '-b', buf, text], check=True)
+    subprocess.run(['tmux', 'paste-buffer', '-d', '-b', buf, '-t', pane], check=True)
+    subprocess.run(['tmux', 'send-keys', '-t', pane, 'C-m'], check=True)
+PY
