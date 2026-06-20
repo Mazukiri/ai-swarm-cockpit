@@ -29,28 +29,43 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
   exit 0
 fi
 
-# Create first pane.
+# Layout:
+# ┌──────────────┬──────────────┐
+# │ AGY          │ Claude       │
+# ├──────────────┼──────────────┤
+# │ DeepSeek     │ Codex        │
+# ├──────────────┴──────────────┤
+# │ live chat (full width)      │
+# └─────────────────────────────┘
+
+# Get terminal height to reserve space for live chat
+TERM_HEIGHT="$(tmux display-message -p '#{window_height}')"
+CHAT_HEIGHT=10
+AGENT_HEIGHT=$(( TERM_HEIGHT - CHAT_HEIGHT - 1 ))
+
+# Create session with AGY (top-left).
 tmux new-session -d -s "$SESSION" -n agents -c "$PROJECT_ROOT"
 P_AGY="$(tmux display-message -p -t "$SESSION:agents.0" '#{pane_id}')"
 tmux send-keys -t "$P_AGY" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent agy" C-m
 
-# Right pane: Claude.
+# Top-right: Claude (split AGY horizontally).
 tmux split-window -h -t "$P_AGY" -c "$PROJECT_ROOT"
 P_CLAUDE="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
 tmux send-keys -t "$P_CLAUDE" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent claude" C-m
 
-# Bottom-left pane: Codex.
-tmux split-window -v -t "$P_AGY" -c "$PROJECT_ROOT"
+# Bottom-right: Codex (split Claude vertically).
+tmux split-window -v -t "$P_CLAUDE" -c "$PROJECT_ROOT"
 P_CODEX="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
 tmux send-keys -t "$P_CODEX" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent codex" C-m
 
-# Bottom-right pane: DeepSeek.
-tmux split-window -v -t "$P_CLAUDE" -c "$PROJECT_ROOT"
+# Bottom-left: DeepSeek (split AGY vertically).
+tmux split-window -v -t "$P_AGY" -c "$PROJECT_ROOT"
 P_DEEPSEEK="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
 tmux send-keys -t "$P_DEEPSEEK" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent deepseek" C-m
 
-# Live chat pane at the bottom.
-tmux split-window -v -t "$P_CODEX" -c "$PROJECT_ROOT" -l 12
+# Live chat: full-width strip at the bottom (split the whole window).
+tmux select-pane -t "$P_AGY"
+tmux split-window -v -t "$SESSION:agents" -c "$PROJECT_ROOT" -l "$CHAT_HEIGHT" -f
 P_CHAT="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
 tmux send-keys -t "$P_CHAT" ".swarm/bin/watch-chat" C-m
 
@@ -73,7 +88,7 @@ JSON
 echo "$SESSION" > .swarm/runtime/session_name
 
 tmux select-window -t "$SESSION:agents"
-tmux select-layout -t "$SESSION:agents" tiled >/dev/null 2>&1 || true
+tmux select-pane -t "$P_AGY"
 
 # Give CLIs a moment to open, then optionally paste boot prompts.
 if [[ "${SWARM_AUTO_BOOT:-1}" == "1" ]]; then
