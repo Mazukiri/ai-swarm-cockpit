@@ -9,9 +9,32 @@ fi
 python3 - <<'PY'
 import json
 import subprocess
+import time
+import uuid
 from pathlib import Path
 
+ROOT = Path('.')
 panes = json.loads(Path('.swarm/runtime/panes.json').read_text())
+QUEUE = ROOT / '.swarm' / 'queue'
+QUEUE.mkdir(parents=True, exist_ok=True)
+
+# Detect exec-loop agents: those whose command starts with "codex"
+def get_exec_agents():
+    env_file = ROOT / '.swarm' / 'agents.env'
+    exec_set = set()
+    if not env_file.exists():
+        return exec_set
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, _, val = line.partition('=')
+        val = val.strip().strip('"\'')
+        if key.strip().endswith('_CMD') and val.startswith('codex'):
+            exec_set.add(key.strip()[:-4].lower())
+    return exec_set
+
+exec_agents = get_exec_agents()
 
 agents = ['agy', 'claude', 'codex', 'deepseek']
 for agent in agents:
@@ -20,6 +43,12 @@ for agent in agents:
     if not pane or not prompt_path.exists():
         continue
     prompt = prompt_path.read_text(encoding='utf-8')
+
+    if agent in exec_agents:
+        # Exec-loop agents boot themselves on startup — skip paste, nothing to do
+        print(f'[boot] {agent.upper()}: exec-loop agent, boot handled by agent-exec-loop')
+        continue
+
     text = f"""Read AI_COLLAB.md and .swarm/prompts/{agent}.md. You are running inside AI Swarm Cockpit.
 
 Important communication commands available in this project:
@@ -38,5 +67,7 @@ Acknowledge your role by sending a short message to AGY using the say command. D
     buf = f'swarm_boot_{agent}'
     subprocess.run(['tmux', 'set-buffer', '-b', buf, text], check=True)
     subprocess.run(['tmux', 'paste-buffer', '-d', '-b', buf, '-t', pane], check=True)
+    time.sleep(0.3)
     subprocess.run(['tmux', 'send-keys', '-t', pane, 'C-m'], check=True)
+    print(f'[boot] {agent.upper()}: paste-boot sent')
 PY
