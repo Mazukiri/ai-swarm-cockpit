@@ -22,6 +22,12 @@ if [[ -z "$cmd" ]]; then
   exit 1
 fi
 
+# Agents whose CLI starts with "codex" use exec-loop mode — the interactive TUI
+# doesn't work reliably with tmux paste delivery, so we run codex exec per message.
+if [[ "$cmd" == codex* ]]; then
+  exec "$PWD/.swarm/bin/agent-exec-loop" "$AGENT"
+fi
+
 clear
 printf 'AI Swarm Agent: %s\n' "$upper"
 printf 'Project: %s\n' "$PWD"
